@@ -3,7 +3,7 @@
   "short_name": "Shadowfall",
   "start_url": "./",
   "display": "fullscreen",
-  "background_color": "#080d0b",
-  "theme_color": "#090d12",
+  "background_color": "#050806",
+  "theme_color": "#07100b",
   "orientation": "landscape"
 }

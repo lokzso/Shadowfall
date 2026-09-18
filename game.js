@@ -1,101 +1,68 @@
-
-const WW=3000,WH=1900;
+(()=>{"use strict";
+const C=document.getElementById("game"),ctx=C.getContext("2d",{alpha:false});
+const boot=document.getElementById("boot"),status=document.getElementById("status"),prog=document.getElementById("progress"),err=document.getElementById("err");
+const hud=document.getElementById("hud"),questEl=document.getElementById("quest"),panel=document.getElementById("panel"),picker=document.getElementById("picker"),heroesEl=document.getElementById("heroes");
+window.onerror=(m,s,l,c,e)=>{boot.style.display="flex";status.textContent="Ошибка запуска";err.textContent=`${m}\nстрока ${l}:${c}\n${e?.stack||""}`};
 const HEROES={
- Warrior:{name:"Воин",color:0x4ea5ff,hp:150,mp:80,atk:24,speed:205,skills:["Рывок","Вихрь","Боевой клич","Казнь"]},
- Mage:{name:"Маг",color:0xb06cff,hp:95,mp:180,atk:19,speed:200,skills:["Огненный шар","Ледяная nova","Телепорт","Метеор"]},
- Ranger:{name:"Следопыт",color:0x55d47b,hp:110,mp:120,atk:22,speed:230,skills:["Выстрел","Ловушка","Ускорение","Град стрел"]}
+ warrior:{name:"Воин",color:"#4ea5ff",hp:160,mp:85,atk:25,speed:230,skills:"Рывок • Вихрь • Клич • Казнь"},
+ mage:{name:"Маг",color:"#b06cff",hp:105,mp:190,atk:21,speed:220,skills:"Огонь • Лёд • Телепорт • Метеор"},
+ ranger:{name:"Следопыт",color:"#55d47b",hp:120,mp:130,atk:23,speed:250,skills:"Выстрел • Ловушка • Ускорение • Град стрел"}
 };
-class Game extends Phaser.Scene{
- constructor(){super("Game")}
- create(){
-  this.sel="Warrior";this.level=1;this.xp=0;this.gold=250;this.quest=0;this.kills=0;this.inv=["Зелье здоровья","Зелье маны","Свиток возврата"];this.equip={weapon:"Ржавый меч",armor:"Кожаная броня"};this.talents=0;this.buildMode=false;this.buildings=[];this.started=false;
-  this.drawWorld();this.enemies=this.physics.add.group();this.allies=this.physics.add.group();this.towers=this.physics.add.staticGroup();
-  this.createHero(610,940);this.spawnWorld();this.makeHUD();this.makeMobile();this.bindKeys();this.load();
-  this.cameras.main.startFollow(this.player,true,.08,.08);this.cameras.main.setBounds(0,0,WW,WH);this.physics.world.setBounds(0,0,WW,WH);
-  this.time.addEvent({delay:1700,loop:true,callback:()=>this.spawnLaneCreeps()});
-  this.time.addEvent({delay:2500,loop:true,callback:()=>this.save()});
-  this.showHeroPicker();
- }
- drawWorld(){
-  this.add.rectangle(WW/2,WH/2,WW,WH,0x183720);
-  this.add.rectangle(1500,950,2700,180,0x6e5a3d).setAngle(-2);
-  this.add.rectangle(1500,300,2700,120,0x66543a);
-  this.add.rectangle(1500,1600,2700,120,0x66543a);
-  this.add.rectangle(1500,950,180,WH,0x66543a);
-  this.add.rectangle(2200,950,220,WH,0x174c62);
-  this.add.rectangle(440,930,550,500,0x3e3427).setStrokeStyle(8,0x17130f);
-  this.add.text(270,650,"КРЕПОСТЬ ТЕНЕЙ",{fontSize:"24px",color:"#ffe29a"});
-  for(let i=0;i<130;i++){let x=Phaser.Math.Between(50,WW-50),y=Phaser.Math.Between(50,WH-50);if(x>2080&&x<2320)continue;this.add.circle(x,y,Phaser.Math.Between(10,24),0x245b30).setStrokeStyle(2,0x102d17)}
-  this.add.rectangle(2700,950,420,520,0x3c2020).setStrokeStyle(8,0x1c0b0b);this.add.text(2580,650,"ЦИТАДЕЛЬ ВРАГА",{fontSize:"22px",color:"#ff9b9b"});
-  this.add.text(1130,105,"СЕВЕРНАЯ ЛИНИЯ",{fontSize:"16px"});this.add.text(1130,1730,"ЮЖНАЯ ЛИНИЯ",{fontSize:"16px"});
- }
- createHero(x,y){
-  let h=HEROES[this.sel];this.maxhp=h.hp;this.hp=h.hp;this.maxmp=h.mp;this.mp=h.mp;this.atk=h.atk;
-  if(this.player)this.player.destroy();
-  this.player=this.physics.add.sprite(x,y,null).setDisplaySize(38,38).setTint(h.color).setCollideWorldBounds(true);this.player.body.setCircle(18);
- }
- spawnWorld(){
-  for(let i=0;i<38;i++)this.spawnEnemy(Phaser.Math.Between(950,2750),Phaser.Math.Between(180,1720),false);
-  this.spawnEnemy(2520,450,true);this.spawnEnemy(2550,1450,true);
-  this.npc=this.physics.add.staticSprite(510,820,null).setDisplaySize(32,32).setTint(0xffd35a);this.add.text(468,775,"Староста",{fontSize:"14px",backgroundColor:"#0009"});
-  this.shop=this.physics.add.staticSprite(650,760,null).setDisplaySize(34,34).setTint(0x36d399);this.add.text(608,715,"Торговец",{fontSize:"14px",backgroundColor:"#0009"});
-  [[850,300],[1450,300],[850,1600],[1450,1600]].forEach(([x,y])=>{let t=this.towers.create(x,y,null).setDisplaySize(48,48).setTint(0x60a5fa);t.team=1});
-  [[2450,300],[2700,300],[2450,1600],[2700,1600]].forEach(([x,y])=>{let t=this.towers.create(x,y,null).setDisplaySize(48,48).setTint(0xef4444);t.team=2});
- }
- spawnEnemy(x,y,boss=false){let e=this.enemies.create(x,y,null).setDisplaySize(boss?68:30,boss?68:30).setTint(boss?0x9b1c31:0xc34b43);e.hp=boss?500:55;e.maxhp=e.hp;e.dmg=boss?18:7;e.speed=boss?55:75;e.boss=boss;e.last=0;if(boss)this.add.text(x-48,y-55,"БОСС",{fontSize:"15px",color:"#ffb3b3"});return e}
- spawnLaneCreeps(){
-  if(this.enemies.countActive(true)>70)return;
-  [300,1600].forEach(y=>{let a=this.allies.create(700,y,null).setDisplaySize(22,22).setTint(0x72a7ff);a.hp=35;a.team=1;a.setVelocityX(70);let e=this.spawnEnemy(2600,y,false);e.lane=true;e.setVelocityX(-60)});
- }
- bindKeys(){this.keys=this.input.keyboard.addKeys("W,A,S,D,Q,E,R,F,I,T,B,ONE,TWO,THREE");this.cursors=this.input.keyboard.createCursorKeys();this.input.on("pointerdown",p=>{if(!p.wasTouch&&this.started)this.target=this.cameras.main.getWorldPoint(p.x,p.y)})}
- makeHUD(){
-  this.hud=this.add.text(10,10,"",{fontSize:"13px",backgroundColor:"#000c",padding:{x:10,y:8}}).setScrollFactor(0).setDepth(50);
-  this.qtxt=this.add.text(10,92,"",{fontSize:"12px",backgroundColor:"#000a",padding:{x:8,y:6}}).setScrollFactor(0).setDepth(50);
-  this.help=this.add.text(10,145,"F NPC/магазин • I инвентарь • T талант • B строительство • QWER способности",{fontSize:"11px",backgroundColor:"#0008",padding:{x:7,y:5}}).setScrollFactor(0).setDepth(50);
-  this.panel=this.add.text(10,180,"",{fontSize:"12px",backgroundColor:"#081018ee",padding:{x:10,y:8}}).setScrollFactor(0).setDepth(60).setVisible(false);
- }
- showHeroPicker(){
-  this.started=false;let bg=this.add.rectangle(this.scale.width/2,this.scale.height/2,Math.min(760,this.scale.width-30),360,0x070b10,.96).setScrollFactor(0).setDepth(100);
-  let title=this.add.text(this.scale.width/2,this.scale.height/2-145,"ВЫБЕРИ ГЕРОЯ",{fontSize:"28px"}).setOrigin(.5).setScrollFactor(0).setDepth(101);
-  let objs=[bg,title];
-  ["Warrior","Mage","Ranger"].forEach((k,i)=>{let h=HEROES[k],x=this.scale.width/2-220+i*220,y=this.scale.height/2;let c=this.add.circle(x,y,55,h.color).setScrollFactor(0).setDepth(101).setInteractive();let t=this.add.text(x,y+75,h.name+"\n"+h.skills.join("\n"),{fontSize:"13px",align:"center"}).setOrigin(.5,0).setScrollFactor(0).setDepth(101);objs.push(c,t);c.on("pointerdown",()=>{this.sel=k;let pos={x:this.player.x,y:this.player.y};this.createHero(pos.x,pos.y);this.cameras.main.startFollow(this.player,true,.08,.08);objs.forEach(o=>o.destroy());this.started=true})});
- }
- makeMobile(){
-  if(!this.sys.game.device.input.touch)return;this.joy={x:0,y:0};
-  let y=()=>this.scale.height-95,base=this.add.circle(95,y(),58,0x000000,.35).setScrollFactor(0).setDepth(70).setInteractive(),knob=this.add.circle(95,y(),24,0xffffff,.3).setScrollFactor(0).setDepth(71);
-  const mv=p=>{let dx=p.x-95,dy=p.y-y(),l=Math.max(1,Math.hypot(dx,dy)),m=Math.min(48,l);knob.setPosition(95+dx/l*m,y()+dy/l*m);this.joy={x:dx/l*(l>10),y:dy/l*(l>10)}};
-  base.on("pointerdown",mv);this.input.on("pointermove",p=>{if(p.isDown&&p.x<210)mv(p)});this.input.on("pointerup",()=>{this.joy={x:0,y:0};knob.setPosition(95,y())});
-  [["Q",70],["W",140],["E",210],["R",280]].forEach(([k,o])=>{let x=this.scale.width-o,b=this.add.circle(x,y(),27,0x263b65,.9).setScrollFactor(0).setDepth(70).setInteractive();this.add.text(x-8,y()-11,k,{fontSize:"18px"}).setScrollFactor(0).setDepth(71);b.on("pointerdown",()=>this.cast(k))});
-  [["F",55,170],["I",115,170],["B",175,170]].forEach(([k,o,up])=>{let x=this.scale.width-o,yy=this.scale.height-up,b=this.add.circle(x,yy,22,0x80651e,.9).setScrollFactor(0).setDepth(70).setInteractive();this.add.text(x-6,yy-9,k,{fontSize:"15px"}).setScrollFactor(0).setDepth(71);b.on("pointerdown",()=>k==="F"?this.interact():k==="I"?this.toggleInventory():this.toggleBuild())});
- }
- cast(k){
-  if(!this.started)return;let costs={Q:10,W:15,E:18,R:35};if(this.mp<costs[k])return;this.mp-=costs[k];
-  let r=k==="R"?330:240,targets=this.nearEnemies(r),mult={Q:1.1,W:.9,E:.75,R:2.6}[k];
-  if(k==="E"&&this.sel==="Warrior")this.hp=Math.min(this.maxhp,this.hp+20);
-  if(k==="E"&&this.sel==="Mage"){let p=this.closestEnemy(400);if(p)this.player.setPosition(p.x-80,p.y)}
-  targets.slice(0,k==="R"?8:(k==="W"?4:1)).forEach(e=>this.damage(e,Math.round(this.atk*mult)));
- }
- nearEnemies(r){return this.enemies.getChildren().filter(e=>e.active&&Phaser.Math.Distance.Between(this.player.x,this.player.y,e.x,e.y)<r).sort((a,b)=>Phaser.Math.Distance.Between(this.player.x,this.player.y,a.x,a.y)-Phaser.Math.Distance.Between(this.player.x,this.player.y,b.x,b.y))}
- closestEnemy(r){return this.nearEnemies(r)[0]}
- damage(e,d){e.hp-=d;this.tweens.add({targets:e,alpha:.25,yoyo:true,duration:70});if(e.hp<=0){this.gold+=e.boss?120:10;this.xp+=e.boss?90:15;this.kills++;if(e.boss&&this.quest===2)this.quest=3;e.destroy();while(this.xp>=100){this.xp-=100;this.level++;this.talents++;this.maxhp+=8;this.hp=this.maxhp;this.atk+=3}}}
- interact(){
-  if(Phaser.Math.Distance.Between(this.player.x,this.player.y,this.npc.x,this.npc.y)<90){if(this.quest===0)this.quest=1;else if(this.quest===1&&this.kills>=5)this.quest=2;else if(this.quest===3){this.quest=4;this.gold+=300;this.inv.push("Клинок Стража");this.equip.weapon="Клинок Стража";this.atk+=12}}
-  else if(Phaser.Math.Distance.Between(this.player.x,this.player.y,this.shop.x,this.shop.y)<90){if(this.gold>=50){this.gold-=50;this.inv.push("Большое зелье")}}
- }
- toggleInventory(){this.panel.setVisible(!this.panel.visible);this.panel.setText("ИНВЕНТАРЬ / ЭКИПИРОВКА\nОружие: "+this.equip.weapon+"\nБроня: "+this.equip.armor+"\n\n"+this.inv.map((x,i)=>`${i+1}. ${x}`).join("\n"))}
- talent(){if(this.talents>0){this.talents--;this.atk+=5;this.maxhp+=10;this.hp+=10}}
- toggleBuild(){this.buildMode=!this.buildMode;if(this.buildMode&&this.gold>=100){this.gold-=100;let t=this.towers.create(this.player.x+70,this.player.y,null).setDisplaySize(42,42).setTint(0xf0c75e);t.team=1;this.buildings.push({x:t.x,y:t.y})}}
- update(){
-  if(!this.started)return;let dx=(this.keys.D.isDown||this.cursors.right.isDown?1:0)-(this.keys.A.isDown||this.cursors.left.isDown?1:0),dy=(this.keys.S.isDown||this.cursors.down.isDown?1:0)-(this.keys.W.isDown||this.cursors.up.isDown?1:0);if(this.joy){dx+=this.joy.x;dy+=this.joy.y}
-  let v=new Phaser.Math.Vector2(dx,dy);if(v.length()){v.normalize().scale(HEROES[this.sel].speed);this.player.setVelocity(v.x,v.y);this.target=null}else if(this.target){let d=new Phaser.Math.Vector2(this.target.x-this.player.x,this.target.y-this.player.y);if(d.length()>10){d.normalize().scale(HEROES[this.sel].speed);this.player.setVelocity(d.x,d.y)}else{this.player.setVelocity(0);this.target=null}}else this.player.setVelocity(0);
-  ["Q","W","E","R"].forEach(k=>{if(Phaser.Input.Keyboard.JustDown(this.keys[k]))this.cast(k)});if(Phaser.Input.Keyboard.JustDown(this.keys.F))this.interact();if(Phaser.Input.Keyboard.JustDown(this.keys.I))this.toggleInventory();if(Phaser.Input.Keyboard.JustDown(this.keys.T))this.talent();if(Phaser.Input.Keyboard.JustDown(this.keys.B))this.toggleBuild();
-  this.enemies.getChildren().forEach(e=>{if(!e.active)return;let d=Phaser.Math.Distance.Between(e.x,e.y,this.player.x,this.player.y);if(!e.lane&&d<280&&d>35)this.physics.moveToObject(e,this.player,e.speed);if(d<40&&this.time.now-e.last>900){e.last=this.time.now;this.hp-=e.dmg;if(this.hp<=0){this.hp=this.maxhp;this.mp=this.maxmp;this.player.setPosition(610,940)}}});
-  this.allies.getChildren().forEach(a=>{let e=this.enemies.getChildren().find(x=>x.active&&Phaser.Math.Distance.Between(a.x,a.y,x.x,x.y)<35);if(e){a.setVelocity(0);if(!a.last||this.time.now-a.last>800){a.last=this.time.now;e.hp-=5;if(e.hp<=0)e.destroy()}}});
-  this.mp=Math.min(this.maxmp,this.mp+.04);
-  this.hud.setText(`${HEROES[this.sel].name} • LVL ${this.level} • XP ${this.xp}/100 • талантов ${this.talents}\nHP ${Math.floor(this.hp)}/${this.maxhp}  MP ${Math.floor(this.mp)}/${this.maxmp}  ATK ${this.atk}  GOLD ${this.gold}`);
-  let qs=["Поговори со Старостой [F]","Убей 5 врагов и вернись ("+Math.min(this.kills,5)+"/5)","Убей одного БОССА","Вернись к Старосте","Основная цепочка завершена — исследуй, строй и качайся"][this.quest];this.qtxt.setText("КВЕСТ: "+qs);
- }
- save(){if(!this.started)return;localStorage.setItem("sf-full",JSON.stringify({sel:this.sel,x:this.player.x,y:this.player.y,level:this.level,xp:this.xp,gold:this.gold,quest:this.quest,kills:this.kills,inv:this.inv,equip:this.equip,talents:this.talents,atk:this.atk,maxhp:this.maxhp,hp:this.hp,maxmp:this.maxmp,mp:this.mp}))}
- load(){try{let s=JSON.parse(localStorage.getItem("sf-full"));if(s){Object.assign(this,s);this.createHero(s.x,s.y);Object.assign(this,{level:s.level,xp:s.xp,gold:s.gold,quest:s.quest,kills:s.kills,inv:s.inv,equip:s.equip,talents:s.talents,atk:s.atk,maxhp:s.maxhp,hp:s.hp,maxmp:s.maxmp,mp:s.mp})}}catch(e){}}
+const world={w:3000,h:1900}, keys={}, enemies=[],creeps=[],towers=[],buildings=[],trees=[];
+let DPR=1,cam={x:0,y:0},last=0,joy={x:0,y:0},selected="warrior",started=false;
+let state={x:610,y:940,level:1,xp:0,gold:250,quest:0,kills:0,talents:0,inv:["Зелье здоровья","Зелье маны","Свиток возврата"],weapon:"Ржавый меч",armor:"Кожаная броня"};
+let player={x:610,y:940,r:18,hp:160,mp:85,maxhp:160,maxmp:85,atk:25,speed:230,cd:{Q:0,W:0,E:0,R:0}};
+function resize(){DPR=Math.min(devicePixelRatio||1,2);C.width=innerWidth*DPR;C.height=innerHeight*DPR;C.style.width=innerWidth+"px";C.style.height=innerHeight+"px";ctx.setTransform(DPR,0,0,DPR,0,0)}
+addEventListener("resize",resize);resize();
+function load(){try{let s=JSON.parse(localStorage.getItem("shadowfall-warborn-v2"));if(s)state={...state,...s}}catch(e){}}
+function save(){state.x=player.x;state.y=player.y;state.hp=player.hp;state.mp=player.mp;state.selected=selected;localStorage.setItem("shadowfall-warborn-v2",JSON.stringify(state))}
+function applyHero(k,keep=true){selected=k;let h=HEROES[k],x=keep?state.x:610,y=keep?state.y:940;player={x,y,r:18,hp:state.hp||h.hp,mp:state.mp||h.mp,maxhp:h.hp+(state.level-1)*8,maxmp:h.mp,atk:h.atk+(state.level-1)*3+(state.weapon==="Клинок Стража"?12:0),speed:h.speed,cd:{Q:0,W:0,E:0,R:0}}}
+function spawnEnemy(x,y,boss=false,lane=false){enemies.push({x,y,r:boss?31:15,hp:boss?480:58,maxhp:boss?480:58,dmg:boss?18:7,speed:boss?48:65,boss,lane,lastHit:0,dead:false})}
+function setupWorld(){for(let i=0;i<110;i++)trees.push({x:60+Math.random()*2880,y:60+Math.random()*1780,r:9+Math.random()*15});for(let i=0;i<34;i++)spawnEnemy(950+Math.random()*1700,160+Math.random()*1550);spawnEnemy(2500,460,true);spawnEnemy(2540,1450,true);[[850,300,1],[1450,300,1],[850,1600,1],[1450,1600,1],[2450,300,2],[2700,300,2],[2450,1600,2],[2700,1600,2]].forEach(a=>towers.push({x:a[0],y:a[1],team:a[2]}))}
+function spawnLane(){[300,1600].forEach(y=>{creeps.push({x:700,y,team:1,hp:40,last:0});spawnEnemy(2620,y,false,true)})}
+function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
+function nearEnemy(r){return enemies.filter(e=>!e.dead&&dist(player,e)<r).sort((a,b)=>dist(player,a)-dist(player,b))}
+function damage(e,n){if(!e||e.dead)return;e.hp-=n;if(e.hp<=0){e.dead=true;state.gold+=e.boss?120:10;state.xp+=e.boss?90:15;state.kills++;if(e.boss&&state.quest===2)state.quest=3;while(state.xp>=100){state.xp-=100;state.level++;state.talents++;player.maxhp+=8;player.hp=player.maxhp;player.atk+=3}}}
+function cast(k){let cost={Q:10,W:15,E:18,R:35}[k],now=performance.now();if(player.mp<cost||player.cd[k]>now)return;player.mp-=cost;player.cd[k]=now+({Q:650,W:1200,E:1800,R:5000}[k]);let list=nearEnemy(k==="R"?330:240),mult={Q:1.15,W:.9,E:.8,R:2.6}[k];if(k==="E"&&selected==="warrior")player.hp=Math.min(player.maxhp,player.hp+24);if(k==="E"&&selected==="mage"&&list[0]){player.x=list[0].x-85;player.y=list[0].y}list.slice(0,k==="R"?8:k==="W"?4:1).forEach(e=>damage(e,Math.round(player.atk*mult)))}
+function interact(){let npc={x:510,y:820},shop={x:650,y:760};if(dist(player,npc)<90){if(state.quest===0)state.quest=1;else if(state.quest===1&&state.kills>=5)state.quest=2;else if(state.quest===3){state.quest=4;state.gold+=300;state.weapon="Клинок Стража";state.inv.push("Клинок Стража");player.atk+=12}}else if(dist(player,shop)<90&&state.gold>=50){state.gold-=50;state.inv.push("Большое зелье")}}
+function inventory(){panel.style.display=panel.style.display==="block"?"none":"block";panel.textContent=`ИНВЕНТАРЬ / ЭКИПИРОВКА\nОружие: ${state.weapon}\nБроня: ${state.armor}\n\n${state.inv.map((x,i)=>`${i+1}. ${x}`).join("\n")}\n\nТаланты: ${state.talents}` }
+function build(){if(state.gold>=100){state.gold-=100;buildings.push({x:player.x+70,y:player.y});}}
+addEventListener("keydown",e=>{keys[e.key.toLowerCase()]=true;if("qwer".includes(e.key.toLowerCase()))cast(e.key.toUpperCase());if(e.key.toLowerCase()==="f")interact();if(e.key.toLowerCase()==="i")inventory();if(e.key.toLowerCase()==="b")build();if(e.key.toLowerCase()==="t"&&state.talents){state.talents--;player.atk+=5;player.maxhp+=10;player.hp+=10}});
+addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
+C.addEventListener("pointerdown",e=>{if(e.pointerType!=="touch"){let wx=e.clientX+cam.x,wy=e.clientY+cam.y;player.target={x:wx,y:wy}}});
+document.querySelectorAll("[data-skill]").forEach(b=>b.onclick=()=>cast(b.dataset.skill));
+document.querySelectorAll("[data-act]").forEach(b=>b.onclick=()=>b.dataset.act==="F"?interact():b.dataset.act==="I"?inventory():build());
+const joyEl=document.getElementById("joy"),knob=document.getElementById("knob");
+function joyMove(e){let r=joyEl.getBoundingClientRect(),x=e.clientX-(r.left+r.width/2),y=e.clientY-(r.top+r.height/2),l=Math.max(1,Math.hypot(x,y)),m=Math.min(34,l);knob.style.transform=`translate(${x/l*m}px,${y/l*m}px)`;joy.x=l>8?x/l:0;joy.y=l>8?y/l:0}
+joyEl.addEventListener("pointerdown",e=>{joyEl.setPointerCapture(e.pointerId);joyMove(e)});joyEl.addEventListener("pointermove",e=>{if(joyEl.hasPointerCapture(e.pointerId))joyMove(e)});joyEl.addEventListener("pointerup",e=>{joy.x=joy.y=0;knob.style.transform=""});
+function rect(x,y,w,h,color){ctx.fillStyle=color;ctx.fillRect(x-cam.x,y-cam.y,w,h)}
+function circle(x,y,r,color){ctx.beginPath();ctx.arc(x-cam.x,y-cam.y,r,0,Math.PI*2);ctx.fillStyle=color;ctx.fill()}
+function text(t,x,y,size=14,color="#fff"){ctx.font=`${size}px system-ui`;ctx.fillStyle=color;ctx.fillText(t,x-cam.x,y-cam.y)}
+function draw(){
+ ctx.fillStyle="#173a22";ctx.fillRect(0,0,innerWidth,innerHeight);
+ rect(150,840,2700,180,"#6f5a3e");rect(150,240,2700,115,"#665239");rect(150,1545,2700,115,"#665239");rect(1410,0,180,1900,"#665239");rect(2110,0,220,1900,"#174d62");
+ trees.forEach(t=>{if(t.x>2070&&t.x<2350)return;circle(t.x,t.y,t.r,"#245c30");circle(t.x-3,t.y-3,t.r*.55,"#2e713b")});
+ rect(250,650,430,480,"#3c3226");text("КРЕПОСТЬ ТЕНЕЙ",285,700,22,"#ffe39a");rect(2550,650,350,500,"#3b2020");text("ЦИТАДЕЛЬ ВРАГА",2580,700,18,"#ffaaaa");
+ circle(510,820,17,"#ffd35a");text("Староста",470,790,13);circle(650,760,17,"#36d399");text("Торговец",610,730,13);
+ towers.forEach(t=>{circle(t.x,t.y,25,t.team===1?"#68a9ff":"#ef5555")});buildings.forEach(t=>circle(t.x,t.y,24,"#e5c15d"));
+ creeps.forEach(c=>{if(c.hp>0)circle(c.x,c.y,11,c.team===1?"#7aafff":"#ff7373")});
+ enemies.forEach(e=>{if(e.dead)return;circle(e.x,e.y,e.r,e.boss?"#8d1830":"#b94540");if(e.boss)text("БОСС",e.x-23,e.y-42,13,"#ffc0c0");ctx.fillStyle="#1a1111";ctx.fillRect(e.x-e.r-cam.x,e.y-e.r-9-cam.y,e.r*2,4);ctx.fillStyle="#df5757";ctx.fillRect(e.x-e.r-cam.x,e.y-e.r-9-cam.y,e.r*2*(e.hp/e.maxhp),4)});
+ circle(player.x,player.y,player.r,HEROES[selected].color);circle(player.x,player.y,7,"#eaf3ff");
 }
-new Phaser.Game({type:Phaser.AUTO,parent:"game",width:1280,height:720,backgroundColor:"#08100b",physics:{default:"arcade",arcade:{debug:false}},scale:{mode:Phaser.Scale.RESIZE,autoCenter:Phaser.Scale.CENTER_BOTH},scene:Game});
+function update(dt){
+ let dx=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0)+joy.x,dy=(keys.s||keys.arrowdown?1:0)-(keys.w||keys.arrowup?1:0)+joy.y,l=Math.hypot(dx,dy);
+ if(l>.05){player.x+=dx/l*player.speed*dt;player.y+=dy/l*player.speed*dt;player.target=null}else if(player.target){let x=player.target.x-player.x,y=player.target.y-player.y,d=Math.hypot(x,y);if(d>8){player.x+=x/d*player.speed*dt;player.y+=y/d*player.speed*dt}else player.target=null}
+ player.x=Math.max(20,Math.min(world.w-20,player.x));player.y=Math.max(20,Math.min(world.h-20,player.y));
+ enemies.forEach(e=>{if(e.dead)return;let d=dist(e,player);if(!e.lane&&d<270&&d>35){e.x+=(player.x-e.x)/d*e.speed*dt;e.y+=(player.y-e.y)/d*e.speed*dt}if(d<38&&performance.now()-e.lastHit>900){e.lastHit=performance.now();player.hp-=e.dmg;if(player.hp<=0){player.hp=player.maxhp;player.mp=player.maxmp;player.x=610;player.y=940}}if(e.lane)e.x-=55*dt});
+ creeps.forEach(c=>c.x+=60*dt);player.mp=Math.min(player.maxmp,player.mp+2.3*dt);
+ cam.x=Math.max(0,Math.min(world.w-innerWidth,player.x-innerWidth/2));cam.y=Math.max(0,Math.min(world.h-innerHeight,player.y-innerHeight/2));
+ hud.innerHTML=`<b>${HEROES[selected].name}</b> · LVL ${state.level} · XP ${state.xp}/100 · 💰 ${state.gold}<br>HP ${Math.floor(player.hp)}/${player.maxhp} · MP ${Math.floor(player.mp)}/${player.maxmp} · ATK ${player.atk}`;
+ let qs=[`Поговори со Старостой [F]`,`Убей 5 врагов и вернись (${Math.min(state.kills,5)}/5)`,`Убей одного БОССА`,`Вернись к Старосте`,`Цепочка выполнена — исследуй мир, качайся и строй`];questEl.textContent="КВЕСТ: "+qs[state.quest];
+}
+function loop(t){let dt=Math.min(.033,(t-last)/1000||0);last=t;update(dt);draw();requestAnimationFrame(loop)}
+function pickerUI(){heroesEl.className="heroRow";heroesEl.innerHTML="";Object.entries(HEROES).forEach(([k,h])=>{let b=document.createElement("button");b.className="hero";b.innerHTML=`<b style="color:${h.color}">${h.name}</b><small>HP ${h.hp} · MP ${h.mp} · ATK ${h.atk}<br>${h.skills}</small>`;b.onclick=()=>{applyHero(k,true);picker.style.display="none";started=true;save()};heroesEl.appendChild(b)});picker.style.display="flex"}
+try{
+ status.textContent="Подготавливаем мир…";prog.style.width="35%";load();setupWorld();prog.style.width="70%";applyHero(state.selected||"warrior",true);
+ setTimeout(()=>{prog.style.width="100%";status.textContent="Готово";setTimeout(()=>{boot.style.display="none";pickerUI();requestAnimationFrame(loop);setInterval(spawnLane,4200);setInterval(save,2500)},250)},180);
+}catch(e){window.onerror(e.message,"game.js",0,0,e)}
+})();
