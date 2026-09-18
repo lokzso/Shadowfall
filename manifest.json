@@ -1,9 +1,0 @@
-{
-  "name": "Shadowfall: Warborn",
-  "short_name": "Shadowfall",
-  "start_url": "./",
-  "display": "fullscreen",
-  "background_color": "#050806",
-  "theme_color": "#07100b",
-  "orientation": "landscape"
-}
